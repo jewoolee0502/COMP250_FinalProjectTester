@@ -7,9 +7,9 @@ import java.util.concurrent.TimeoutException;
 
 public class RandomTester {
 	private static final double SEED_DENSITY = 0.05;
-	private static final double MIN_CLUE_DENSITY = 0.2;
-	private static final double MAX_CLUE_DENSITY = 0.5;
-	private static final boolean SHOW_PROGRESS = false;
+	private static final double MIN_CLUE_DENSITY = 0.4;
+	private static final double MAX_CLUE_DENSITY = 0.6;
+	private static final boolean SHOW_PROGRESS = true;
 	private static final long TIMEOUT_MILLIS = 60000;
 	private static final boolean SHOW_SUMMARY = true;
 
@@ -20,7 +20,7 @@ public class RandomTester {
 
 		// Greeting/message
 		System.out.println(
-				"NOTE: Your solving algorithm is used in the process of generating random puzzles.."
+				"NOTE: Your solving algorithm is used in the process of generating random puzzles."
 						+ "\nIf it does not work, the generated puzzles may not be solvable.\n");
 
 		// Get number of puzzles
@@ -63,23 +63,55 @@ public class RandomTester {
 		}
 		System.out.println();
 
+		boolean knightRule = false;
+		boolean kingRule = false;
+		boolean queenRule = false;
+		boolean allSolutions = false;
+
 		// Generate and solve sudokus
+		int numSolved = 0;
 		long duration;
 		long minTime = Long.MAX_VALUE;
 		long maxTime = 0;
 		long total = 0;
 		for (int i = 0; i < numPuzzles; i++) {
 			if (SHOW_PROGRESS)
-				System.out.println("Generating puzzle... ");
-			ChessSudoku puzzle = makeRandomPuzzle(size, false, false, false);
+				System.out.print("Generating puzzle... ");
+
+			ChessSudoku puzzle;
+			try {
+				puzzle = makeRandomPuzzle(size, knightRule, kingRule,
+						queenRule);
+			} catch (TimeoutException e1) {
+				System.out.println("[Puzzle generation timed out after "
+						+ TIMEOUT_MILLIS + " ms]");
+				continue;
+			}
 			ChessSudoku puzzleCopy = deepCopyPuzzle(puzzle);
+
 			if (SHOW_PROGRESS)
-				System.out.print("Solving... ");
+				System.out.print("\nSolving... ");
+
+			// TODO Remove this
+			// System.out.println("Puzzle:");
+			// puzzle.print();
+			// System.out.println();
 
 			try {
-				duration = Tester.runSolve(puzzle, false, TIMEOUT_MILLIS);
+				duration = Tester.runSolve(puzzle, allSolutions,
+						TIMEOUT_MILLIS);
 				if (Tester.isSolved(puzzle, false, false, false)) {
 					System.out.println((double) duration / 1000000 + " ms");
+					if (allSolutions)
+						System.out.println("  (" + puzzle.solutions.size()
+								+ " solution(s) found)");
+					// Collect stats
+					numSolved++;
+					total += duration;
+					if (duration < minTime)
+						minTime = duration;
+					if (duration > maxTime)
+						maxTime = duration;
 				} else {
 					System.out.println("Puzzle not solved");
 					System.out.println("Original puzzle:");
@@ -91,7 +123,8 @@ public class RandomTester {
 					System.out.println();
 				}
 			} catch (TimeoutException e) {
-				System.out.println("[Timeout after " + TIMEOUT_MILLIS + " ms]");
+				System.out
+						.println("\n[Timeout after " + TIMEOUT_MILLIS + " ms]");
 				System.out.println("Original puzzle:");
 				puzzleCopy.print();
 				System.out.println();
@@ -101,15 +134,6 @@ public class RandomTester {
 				e.printStackTrace();
 				duration = TIMEOUT_MILLIS * 1000000;
 			}
-
-			// Collect stats
-			if (SHOW_SUMMARY) {
-				if (duration < minTime)
-					minTime = duration;
-				if (duration > maxTime)
-					maxTime = duration;
-				total += duration;
-			}
 		}
 
 		// Show stats
@@ -117,12 +141,16 @@ public class RandomTester {
 			System.out.println();
 			System.out.println("Stats:");
 			System.out.println("------");
-			System.out.printf("Fastest solve: %.3f ms\n",
-					(double) minTime / 1000000);
-			System.out.printf("Slowest solve: %.3f ms\n",
-					(double) maxTime / 1000000);
-			System.out.printf("Average: %.3f ms\n",
-					(double) total / (1000000 * numPuzzles));
+			System.out.println(
+					"No. successful solves: " + numSolved + "/" + numPuzzles);
+			if (numSolved > 0) {
+				System.out.printf("Fastest solve: %.3f ms\n",
+						(double) minTime / 1000000);
+				System.out.printf("Slowest solve: %.3f ms\n",
+						(double) maxTime / 1000000);
+				System.out.printf("Average: %.3f ms\n",
+						(double) total / (1000000 * numPuzzles));
+			}
 		}
 
 		// Force the program to exit to make sure all solves stop
@@ -132,6 +160,9 @@ public class RandomTester {
 	public static ChessSudoku seedPuzzle(int size, boolean knightRule,
 			boolean kingRule, boolean queenRule) {
 		ChessSudoku puzzle = new ChessSudoku(size);
+		puzzle.knightRule = knightRule;
+		puzzle.kingRule = kingRule;
+		puzzle.queenRule = queenRule;
 		int n = size * size;
 
 		int numCluesToAdd = (int) (SEED_DENSITY * n * n);
@@ -158,11 +189,29 @@ public class RandomTester {
 	}
 
 	private static ChessSudoku makeRandomPuzzle(int size, boolean knightRule,
-			boolean kingRule, boolean queenRule) {
+			boolean kingRule, boolean queenRule) throws TimeoutException {
 		int n = size * size;
 
+		if (SHOW_PROGRESS)
+			System.out.print("Creating seed... ");
+
 		ChessSudoku puzzle = seedPuzzle(size, knightRule, kingRule, queenRule);
-		puzzle.solve(false);
+
+		if (SHOW_PROGRESS)
+			System.out.print("Solving seed... ");
+
+		try {
+			Tester.runSolve(puzzle, false, TIMEOUT_MILLIS);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		if (SHOW_PROGRESS)
+			System.out.print("Filtering... ");
 
 		// Decide how many clues to give
 		int minInt = (int) (MIN_CLUE_DENSITY * n * n);

@@ -42,6 +42,9 @@ class veryEasy3x3_solution implements Runnable {
 
 		ChessSudoku s = new ChessSudoku(puzzleSize);
 
+		// Uncomment to see what is going on
+		// Visualizer visualizer = new Visualizer(s);
+
 		// You can modify these to add rules to your sudoku
 		s.knightRule = false;
 		s.kingRule = false;
@@ -96,6 +99,9 @@ class easy3x3_solution implements Runnable {
 		}
 
 		ChessSudoku s = new ChessSudoku(puzzleSize);
+
+		// Uncomment to see what is going on
+		// Visualizer visualizer = new Visualizer(s);
 
 		// You can modify these to add rules to your sudoku
 		s.knightRule = false;
@@ -153,6 +159,9 @@ class medium3x3_12solutions_solution implements Runnable {
 
 		ChessSudoku s = new ChessSudoku(puzzleSize);
 
+		// Uncomment to see what is going on
+		// Visualizer visualizer = new Visualizer(s);
+
 		// You can modify these to add rules to your sudoku
 		s.knightRule = false;
 		s.kingRule = false;
@@ -177,7 +186,8 @@ class medium3x3_12solutions_solution implements Runnable {
 		}
 		if (counter != 12) {
 			throw new AssertionError(
-					"Test failed.There should be 12 solutions");
+					"Test failed. There should be 12 solutions, but " + counter
+							+ " were given.");
 		}
 		System.out.println("Test passed.");
 	}
@@ -199,7 +209,11 @@ class all_puzzles_benchmark implements Runnable {
 			"veryEasy4x4.txt",
 			"hard4x4.txt",
 			"veryHard4x4.txt",
-			"veryHard5x5.txt"
+			"knightKing4x4.txt",
+			"queen4x4.txt",
+			"harder5x5.txt",
+			"veryHard5x5.txt",
+			"queen5x5.txt"
 	};
 	private boolean[] knightRules = {
 			false,
@@ -213,6 +227,10 @@ class all_puzzles_benchmark implements Runnable {
 			false,
 			false,
 			false,
+			false,
+			false,
+			false,
+			true,
 			false,
 			false,
 			false,
@@ -233,6 +251,10 @@ class all_puzzles_benchmark implements Runnable {
 			false,
 			false,
 			false,
+			true,
+			false,
+			false,
+			false,
 			false
 	};
 	private boolean[] queenRules = {
@@ -250,15 +272,29 @@ class all_puzzles_benchmark implements Runnable {
 			false,
 			false,
 			false,
-			false
+			false,
+			true,
+			false,
+			false,
+			true
 	};
-	private final long TIMEOUT_MILLIS = 1000;
+	private final long TIMEOUT_MILLIS = 60000;
 
 	@Override
 	public void run() {
 		boolean testsRun = true;
 		boolean allSolutionsCorrect = true;
+		boolean timeout = false;
 		long totalTime = 0;
+
+		// Get longest name
+		int maxNameLength = 0;
+		for (String str : puzzles) {
+			int currentLength = str.length();
+			if (currentLength > maxNameLength)
+				maxNameLength = currentLength;
+		}
+
 		for (int i = 0; i < puzzles.length; i++) {
 			String puzzleName = puzzles[i];
 			try {
@@ -284,7 +320,8 @@ class all_puzzles_benchmark implements Runnable {
 				// read the rest of the Sudoku puzzle
 				s.read(in);
 
-				System.out.print(puzzleName + ": ");
+				System.out.printf("%-" + (maxNameLength + 3) + "s",
+						puzzleName + ":");
 				long duration;
 				try {
 					duration = Tester.runSolve(s, false, TIMEOUT_MILLIS);
@@ -298,6 +335,7 @@ class all_puzzles_benchmark implements Runnable {
 					}
 				} catch (TimeoutException e) {
 					duration = TIMEOUT_MILLIS * 1000000;
+					timeout = true;
 					System.out.println(
 							"[Timeout after " + TIMEOUT_MILLIS + " ms]");
 				}
@@ -308,7 +346,7 @@ class all_puzzles_benchmark implements Runnable {
 			}
 		}
 
-		if (testsRun && allSolutionsCorrect) {
+		if (testsRun && allSolutionsCorrect && !timeout) {
 			System.out.println("-------------------------");
 			System.out.printf("Total time: %.3f ms\n",
 					(double) totalTime / 1000000);
@@ -316,10 +354,19 @@ class all_puzzles_benchmark implements Runnable {
 		} else if (!testsRun) {
 			System.out.println();
 			throw new AssertionError("One or more tests could not be run.");
-		} else {
+		} else if (!allSolutionsCorrect) {
 			System.out.println();
 			throw new AssertionError(
 					"One or more puzzles were not solved correctly");
+		} else {
+			System.out.println("-------------------------");
+			System.out.printf("Total time > %.3f ms\n",
+					(double) totalTime / 1000000);
+			System.out.println();
+			throw new AssertionError(
+					"One or more tests could not be completed in "
+							+ TIMEOUT_MILLIS
+							+ " ms. \nTry increasing TIMEOUT_MILLIS.");
 		}
 	}
 }
@@ -337,7 +384,8 @@ class ChessSudoku_extra_methods implements Runnable {
 		for (Method m : cls.getDeclaredMethods()) {
 			if (!Modifier.isPrivate(m.getModifiers())
 					&& !TMethod.elementOf(m, requiredMethods)) {
-				throw new AssertionError("Extra method found: " + m);
+				throw new AssertionError(
+						"Extra non-private method found: " + m);
 			}
 		}
 	}
@@ -378,7 +426,7 @@ class ChessSudoku_extra_fields implements Runnable {
 		for (Field f : cls.getDeclaredFields()) {
 			if (!Modifier.isPrivate(f.getModifiers())
 					&& !TField.elementOf(f, requiredFields))
-				throw new AssertionError("Extra field found: " + f);
+				throw new AssertionError("Extra non-private field found: " + f);
 		}
 	}
 
@@ -413,7 +461,8 @@ class ChessSudoku_extra_constructors implements Runnable {
 		for (Constructor c : cls.getDeclaredConstructors()) {
 			if (!Modifier.isPrivate(c.getModifiers())
 					&& !TConstructor.elementOf(c, requiredConstructors))
-				throw new AssertionError("Extra constructor found: " + c);
+				throw new AssertionError(
+						"Extra non-private constructor found: " + c);
 		}
 	}
 
@@ -440,8 +489,10 @@ class ChessSudoku_extra_classes implements Runnable {
 		Class[] requiredClasses = getRequiredClasses();
 
 		for (Class c : cls.getDeclaredClasses()) {
-			if (!Arrays.asList(requiredClasses).contains(c))
-				throw new AssertionError("Extra nested class found: " + c);
+			if (!Modifier.isPrivate(c.getModifiers())
+					&& !Arrays.asList(requiredClasses).contains(c))
+				throw new AssertionError(
+						"Extra non-private nested class found: " + c);
 		}
 	}
 
